@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>APB Maintenance — Prototype</title>
+<style>
+:root{font-family:system-ui,Arial;color:#18283b;background:#f2f5f9}*{box-sizing:border-box}body{margin:0}header{background:#123554;color:white;padding:18px}main{max-width:950px;margin:auto;padding:16px}h1{margin:0;font-size:1.5rem}h2{font-size:1.2rem}section{background:white;border-radius:12px;padding:16px;margin:14px 0;box-shadow:0 2px 10px #1223}label{display:block;margin:10px 0 4px;font-weight:600}input,select,textarea{width:100%;padding:10px;border:1px solid #bac6d2;border-radius:7px;font:inherit}button{border:0;background:#145d8f;color:white;padding:11px 15px;border-radius:8px;margin:6px 5px 6px 0;font-weight:650;cursor:pointer}button.secondary{background:#566778}button.danger{background:#a33131}.muted{color:#526374;font-size:.9rem}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}.hidden{display:none}.item{border:1px solid #d8e1e9;border-radius:8px;padding:12px;margin:8px 0}.status{font-size:.85rem;color:#315a75}#logoPreview{max-height:70px;max-width:220px} @media print{header button,button,input[type=file],.no-print{display:none!important}body{background:white}section{box-shadow:none;border:1px solid #ddd;break-inside:avoid}}
+</style></head><body>
+<header><h1>🛡 APB Maintenance</h1><div>Prototype local — maintenance SSI</div></header>
+<main>
+<section><h2>Entreprise</h2><label>Logo APB (facultatif)</label><input type="file" id="logoFile" accept="image/*"><img id="logoPreview" alt="" class="hidden"><p class="muted">Le logo est conservé dans ce navigateur, si sa taille le permet.</p></section>
+<section><h2>Intervention</h2><div class="grid"><div><label>Client</label><input id="client" placeholder="Nom du client"></div><div><label>Site</label><input id="site" placeholder="Établissement"></div><div><label>Adresse</label><input id="address"></div><div><label>Date</label><input id="date" type="date"></div><div><label>Technicien</label><input id="tech"></div><div><label>Type d'intervention</label><select id="kind"><option>Maintenance préventive</option><option>Maintenance corrective</option></select></div></div></section>
+<section><h2>Inventaire des équipements</h2><div class="grid"><div><label>Famille</label><select id="type"></select></div><div><label>Repère / libellé</label><input id="label" placeholder="Ex. Moteur désenfumage 01"></div><div><label>Emplacement</label><input id="place" placeholder="Bâtiment / niveau / local"></div><div><label>Marque / modèle</label><input id="model"></div></div><button onclick="addEquipment()">Ajouter l'équipement</button><div id="inventory"></div></section>
+<section><h2>Contrôles</h2><p class="muted">Choisis un résultat pour chaque contrôle. Les essais sont indicatifs et doivent être adaptés aux notices, à l'installation et aux procédures de sécurité du site.</p><div id="controls"></div></section>
+<section><h2>Observations et anomalies</h2><label>Nouvelle observation</label><textarea id="obsText" rows="3" placeholder="Décrire le défaut, la réserve ou la préconisation"></textarea><button onclick="addObservation()">Ajouter une observation numérotée</button><div id="observations"></div></section>
+<section><h2>Clôture et rapport</h2><label>Conclusion / limites d'intervention</label><textarea id="conclusion" rows="3"></textarea><label>Nom du représentant client ou mention « Client absent »</label><input id="customerSignature" placeholder="Client absent"><p class="muted">Cette version n'intègre pas encore de signature manuscrite ni de validation réglementaire.</p><button onclick="review()">Relire le rapport</button><button onclick="exportData()" class="secondary">Sauvegarder en JSON</button><button onclick="document.getElementById('importFile').click()" class="secondary">Restaurer un JSON</button><input id="importFile" type="file" accept=".json,application/json" class="hidden"><div id="review" class="hidden"><h3>Relecture avant impression</h3><div id="summary"></div><button onclick="window.print()">Imprimer / Enregistrer en PDF</button></div></section>
+<p class="muted">Prototype de démonstration. Les données restent dans le navigateur utilisé et peuvent être effacées. Ne pas y saisir de données clients réelles ni l'utiliser comme rapport de maintenance officiel. Synchronisation, comptes et sauvegarde serveur non disponibles.</p>
+</main>
+<script>
+const types={
+"ECS / centrale SDI":["État général et accessibilité","Alimentation secteur","Alimentation secondaire / batteries","Affichage, voyants et signalisation sonore","Essais d'alarme et défaut","Réarmement / retour en veille"],
+"Détecteur automatique":["Identification / implantation","État et propreté","Essai de détection adapté","Transmission à l'ECS","Retour en veille"],
+"Déclencheur manuel":["Identification / accessibilité","État du boîtier","Essai de déclenchement","Transmission à l'ECS","Réarmement"],
+"Tableau répétiteur":["État général","Alimentation","Affichage et reports","Essai de signalisation"],
+"CMSI / UCMC / US":["État général","Alimentations et défauts","Commandes manuelles","Signalisation et retours d'état","Réarmement"],
+"UGA / diffuseurs":["État et accessibilité","Alimentations","Commande d'évacuation","Diffusion sonore / lumineuse","Retour en veille"],
+"Moteur / ventilateur de désenfumage":["État mécanique et électrique apparent","Coffret / protections associés","Commande de démarrage","Marche effective","Retour marche / défaut si présent","Arrêt pompier si applicable","Remise en service"],
+"Coffret de relayage":["État / repérage","Alimentation","Commande et relayage","Signalisations / retours","Dispositifs de sécurité et réarmement"],
+"Pressostat / contrôle de débit":["État / raccordement","Essai de fonctionnement adapté","Transmission du défaut ou de l'information"],
+"Exutoire / ouvrant / trappe":["État et accessibilité","Commande d'ouverture","Position de sécurité","Signalisation si prévue","Réarmement / fermeture"],
+"DAC / DCM / commande":["État / repérage","Commande manuelle","Transmission de commande","Réarmement"],
+"Porte coupe-feu":["État / fermeture libre","Dispositif de retenue","Commande de libération","Fermeture effective","Signalisation si prévue"],
+"Clapet / volet coupe-feu":["État et accessibilité","Commande de sécurité","Position de sécurité","Retour de position si présent","Réarmement"],
+"Issue de secours / verrouillage":["Accessibilité","État du verrouillage","Commande de déverrouillage","Déverrouillage effectif","Réarmement / signalisation"],
+"Arrêt technique CTA":["Repérage","Réception commande d'arrêt","Arrêt effectif de la CTA","Report d'état si présent","Remise en service"],
+"Arrêt technique ventilation / clim":["Repérage","Réception commande d'arrêt","Arrêt effectif","Report d'état si présent","Remise en service"],
+"Autre arrêt technique / asservissement":["Identification","Commande de mise en sécurité","Effet attendu","Report d'état si présent","Retour en service"],
+"AES / EAE / EAES / batteries":["État / repérage","Alimentation principale","Batteries / connexions","Signalisation des défauts","Contrôles adaptés au constructeur"],
+"BAES / BAEH":["État / implantation","Présence alimentation","Essai de fonctionnement","Autonomie selon procédure applicable","Remise en veille"],
+"Autre équipement SSI":["Identification","État général","Essai fonctionnel adapté","Report / signalisation si prévu"]
+};
+let data={fields:{},equipments:[],observations:[],logo:""};
+const ids=["client","site","address","date","tech","kind","conclusion","customerSignature"];
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function save(){ids.forEach(id=>data.fields[id]=$(id).value);try{localStorage.setItem("apb-v01",JSON.stringify(data))}catch(e){alert("Stockage local saturé : exporte une sauvegarde JSON.")}}
+function load(){try{const v=JSON.parse(localStorage.getItem("apb-v01"));if(v&&Array.isArray(v.equipments)&&Array.isArray(v.observations))data=v}catch(e){}ids.forEach(id=>{if(data.fields[id]!=null)$(id).value=data.fields[id]});if(!data.fields.date)$("date").value=new Date().toLocaleDateString("en-CA");if(data.logo){$("logoPreview").src=data.logo;$("logoPreview").classList.remove("hidden")}render()}
+function addEquipment(){const type=$("type").value,label=$("label").value.trim()||type;data.equipments.push({type,label,place:$("place").value,model:$("model").value,results:{}});["label","place","model"].forEach(x=>$(x).value="");save();render()}
+function removeEquipment(i){if(!confirm("Supprimer cet équipement et ses contrôles ?"))return;data.equipments.splice(i,1);save();render()}
+function setResult(i,k,value){data.equipments[i].results[k]=value;save();render()}
+function addObservation(){const v=$("obsText").value.trim();if(!v)return;data.observations.push(v);$("obsText").value="";save();render()}
+function removeObservation(i){data.observations.splice(i,1);save();render()}
+function render(){
+$("inventory").innerHTML=data.equipments.map((e,i)=>`<div class="item"><strong>${i+1}. ${esc(e.label)}</strong><div class="muted">${esc(e.type)} — ${esc(e.place)} — ${esc(e.model)}</div><button class="danger" onclick="removeEquipment(${i})">Supprimer</button></div>`).join("")||"<p>Aucun équipement ajouté.</p>";
+$("controls").innerHTML=data.equipments.map((e,i)=>`<div class="item"><strong>${i+1}. ${esc(e.label)}</strong>${(types[e.type]||types["Autre équipement SSI"]).map((k,j)=>`<label>${esc(k)}</label><select onchange="setResult(${i},${j},this.value)"><option value="">À contrôler</option>${["Conforme","Non conforme","Non vérifié","Sans objet"].map(v=>`<option ${e.results[j]===v?"selected":""}>${v}</option>`).join("")}</select>`).join("")}</div>`).join("")||"<p>Ajoute un équipement pour afficher ses contrôles.</p>";
+$("observations").innerHTML=data.observations.map((o,i)=>`<div class="item"><strong>Observation ${i+1}</strong><p>${esc(o)}</p><button class="danger" onclick="removeObservation(${i})">Supprimer</button></div>`).join("")||"<p>Aucune observation.</p>";
+}
+function review(){save();const pending=data.equipments.reduce((n,e)=>n+(types[e.type]||types["Autre équipement SSI"]).filter((k,j)=>!e.results[j]).length,0);$("summary").innerHTML=`<p><strong>${esc(data.fields.client)}</strong> — ${esc(data.fields.site)} — ${esc(data.fields.date)}</p><p>${data.equipments.length} équipement(s), ${data.observations.length} observation(s), ${pending} contrôle(s) sans résultat.</p>${pending?"<p><strong>Attention : contrôles non renseignés à compléter ou justifier.</strong></p>":""}<p>Relire les résultats, observations et limites avant impression.</p>`;$("review").classList.remove("hidden");$("review").scrollIntoView({behavior:"smooth"})}
+function exportData(){save();const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="APB-Maintenance-sauvegarde.json";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
+$("importFile").onchange=async ev=>{const f=ev.target.files[0];if(!f)return;try{const obj=JSON.parse(await f.text());if(!Array.isArray(obj.equipments)||!Array.isArray(obj.observations)||!obj.fields)throw Error();if(!confirm("Remplacer les données locales par cette sauvegarde ?"))return;data=obj;save();load()}catch(e){alert("Fichier JSON invalide")}};
+$("logoFile").onchange=ev=>{const f=ev.target.files[0];if(!f)return;if(f.size>300000){alert("Logo trop volumineux (maximum 300 Ko).");return}const reader=new FileReader();reader.onload=()=>{data.logo=reader.result;$("logoPreview").src=data.logo;$("logoPreview").classList.remove("hidden");save()};reader.readAsDataURL(f)};
+ids.forEach(id=>$(id).addEventListener("change",save));
+$("type").innerHTML=Object.keys(types).map(t=>`<option>${esc(t)}</option>`).join("");
+load();
+</script></body></html>
